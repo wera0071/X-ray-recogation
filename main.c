@@ -14,6 +14,31 @@ typedef struct {
 	unsigned char *imageData;
 } PGM;
 
+int dx[4] = {0, 0, 1, -1};
+int dy[4] = {1, -1, 0, 0};
+
+int is_valid(int row, int col, PGM* image) {
+	if (row < 0 || col < 0 || row >= image->height || col >= image->width) return 0;
+	if (image->imageData[row * image->width + col] != 0) return 0; 
+	return 1;
+}
+
+void dfs(int row, int col, PGM* image, PGM* colorful_image, int color) {
+	int cord = row * image->width + col;
+	colorful_image->imageData[cord] = color;
+
+	for (int i = 0; i < 4; ++i) {
+		int new_row = row + dx[i];
+		int new_col = col + dy[i];
+		int new_cord = new_row * image->width + new_col;
+
+		if (is_valid(new_row, new_col, colorful_image)) {
+			printf("go to x = %d, y = %d newcord = %d\n", new_row, new_col, new_cord);
+			dfs(new_row, new_col, image, colorful_image, color);
+		}
+	}
+}
+
 
 void padding(PGM* image) {
 	for (int i = 0; i < image->width; i++) {
@@ -84,7 +109,11 @@ void copy(PGM* image, PGM* out_image) {
 	}
 }
 
+FILE * file;
+
 int main() {
+	file = fopen("test.txt", "w+");
+
 	char *inputPath = "hampster.png";
 	int InputWidth, InputHeight, n;
 	unsigned char *idata = stbi_load(inputPath, &InputWidth, &InputHeight, &n, 0);
@@ -99,17 +128,25 @@ int main() {
 	unsigned char* odata = calloc(InputWidth * InputHeight, sizeof(unsigned char));
 
 	PGM image;
-	PGM out_image;
-	PGM final_image;
 	image.width = InputWidth;
 	image.height = InputHeight;
+	image.imageData = calloc(InputWidth * InputHeight, sizeof(unsigned char));
+
+	PGM out_image;
 	out_image.width = InputWidth;
 	out_image.height = InputHeight;
+	out_image.imageData = calloc(InputWidth * InputHeight, sizeof(unsigned char));
+	
+	PGM colorful_image;
+	colorful_image.width = InputWidth;
+	colorful_image.height = InputHeight;
+	colorful_image.imageData = calloc(InputWidth * InputHeight, sizeof(unsigned char));
+
+	PGM final_image;
 	final_image.width = InputWidth;
 	final_image.height = InputHeight;
-	image.imageData = calloc(InputWidth * InputHeight, sizeof(unsigned char));
-	out_image.imageData = calloc(InputWidth * InputHeight, sizeof(unsigned char));
-	final_image.imageData = calloc(InputWidth * InputHeight*4, sizeof(unsigned char));
+	final_image.imageData = calloc(InputWidth * InputHeight * 4, sizeof(unsigned char));
+
 	for (int i = 0; i < InputWidth * InputHeight * n; i += 4) {
 		image.imageData[i / 4] = (pixel[i] * 11 + pixel[i + 1] * 16 + 5 * pixel[i + 2]) / 32;	
 	}
@@ -119,27 +156,33 @@ int main() {
 	blur(&image, &out_image);
 	copy(&image, &out_image);
 	sobel_edge_detector(&image, &out_image);	
-	
+	dfs(0, 0, &out_image, &colorful_image, 1);
+
+
 	char *outputPath = "output.png";
 	char *outputPathSobel = "outputSobel.png";
 	char *final="final.png";
 	stbi_write_png(outputPath, InputWidth, InputHeight, 1, image.imageData, 0);
 	stbi_write_png(outputPathSobel, InputWidth, InputHeight, 1, out_image.imageData, 0);
     	 
-    	for (int i=0; i<InputWidth*InputHeight; i++) 
-    	{ 
-        int c=out_image.imageData[i]/64; 
-        final_image.imageData[4*i]=c*20; 
-        final_image.imageData[4*i+1]=20*c+0; 
-        final_image.imageData[4*i+2]=4*c+10; 
+	for (int i = 0; i < InputHeight * InputWidth; ++i) {
+		fprintf(file, "%d ", colorful_image.imageData[i]);
+		if ((i + 1) % InputWidth == 0) fprintf(file, "\n");
+	}
+
+    for (int i=0; i < InputWidth * InputHeight; i++) { 
+        int c=colorful_image.imageData[i]; 
+        final_image.imageData[4*i]=c; 
+        final_image.imageData[4*i+1]=c; 
+        final_image.imageData[4*i+2]=c; 
         final_image.imageData[4*i+3]=255; 
         
-    	} 
-    	stbi_write_png(final, InputWidth, InputHeight, 4, final_image.imageData, 0);
+    } 
+	stbi_write_png(final, InputWidth, InputHeight, 4, final_image.imageData, 0);
 	stbi_image_free(idata);
 	stbi_image_free(image.imageData);
 	stbi_image_free(out_image.imageData);
 	stbi_image_free(final_image.imageData);
-	
+	fclose(file);	
 	return 0;
 }
